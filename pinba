@@ -1,0 +1,95 @@
+#!/usr/local/php-fpm/bin/php
+<?php
+
+
+switch (basename($_SERVER["SCRIPT_FILENAME"])){
+        case 'pinba_time_total':
+                $label = 'Pinba top 10 CPU utilization total';
+		$field = 'req_time_total';
+                break;
+
+        case 'pinba_utime_total':
+                $label = 'Pinba top 10 CPU utilization in user mode';
+		$field = 'ru_utime_total';
+                break;
+
+        case 'pinba_stime_total':
+                $label = 'Pinba top 10 CPU utilization in system mode';
+		$field = 'ru_stime_total';
+                break;
+
+        case 'pinba_time_percent':
+                $label = 'Pinba top 10 CPU utilization %';
+		$field = 'req_time_percent';
+                break;
+
+        case 'pinba_req_per_sec':
+                $label = 'Pinba top 10 requests/second';
+		$field = 'req_per_sec';
+                break;
+
+        default:
+                echo "\nCorrect usage of Pinba plugin for Munin: \n\n";
+		show_usage(); 
+		echo "\n";
+		exit(1);
+}
+
+
+try {
+$db = new PDO('mysql:host=localhost;dbname=pinba', 'pinba','');
+
+//$stmt = $db->prepare("select script_name, req_per_sec, req_time_total, req_time_percent from report_by_script_name order by req_time_total desc limit 10");
+$stmt = $db->prepare("select script_name, $field from report_by_script_name order by $field desc limit 10");
+$stmt->execute();
+
+$result = $stmt->fetchAll();
+
+} catch (PDOException $e) {
+    print "Error!: " . $e->getMessage() . "<br/>";
+    die();
+}
+
+
+$buffer  = "graph_title Pinba top 10 CPU $label\n";
+$buffer .= "graph_args --base 1000\n";
+$buffer .= "graph_category pinba\n";
+$buffer .= "graph_vlabel CPU $label msec\n\n";
+
+$values = '' ;
+
+for ($i=0; $i<sizeof($result); $i++){
+$result[$i][2] = str_replace (array('/','.'), array('_','_'), $result[$i][0]);
+$buffer .= $result[$i][2] . '.label ' . $result[$i][0] . "\n";
+$buffer .= $result[$i][2] . '.info CPU ' . $label . ' '. $result[$i][0] . "\n";
+$buffer .= $result[$i][2] . ".draw LINE2\n";
+
+$values .= $result[$i][2] . '.value ' . $result[$i][1] . "\n";
+}
+if (!empty($argv[1]) && $argv[1] == 'config'){
+echo $buffer;
+exit(0);
+}
+elseif (!empty($argv[1]) && $argv[1] == 'suggest')
+{
+show_usage();
+}
+else{
+echo $values;
+exit(0);
+}
+
+function show_usage(){
+echo <<<HELP
+ln -s /usr/share/munin/plugins/pinba /etc/munin/plugins/pinba_time_total for top 10 ordered by total CPU usage
+ln -s /usr/share/munin/plugins/pinba /etc/munin/plugins/pinba_time_total for top 10 ordered by total CPU usage
+ln -s /usr/share/munin/plugins/pinba /etc/munin/plugins/pinba_utime_total for top 10 ordered by CPU usage in user mode
+ln -s /usr/share/munin/plugins/pinba /etc/munin/plugins/pinba_time_percent for top 10 ordered by CPU shown in %
+ln -s /usr/share/munin/plugins/pinba /etc/munin/plugins/pinba_req_per_sec for top 10 requested scripts
+
+
+Don't forget to restart munin-node after creating symlinks by running  'service munin-node restart'
+HELP;
+
+}
+?>
